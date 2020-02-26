@@ -1,7 +1,8 @@
 import datetime
-from log_into_wiki import *
+from mwclient import Site
 
-site = login('me','spyro')
+site = Site('https://lol.gamepedia.com', path="/") # Set wiki
+site.login('RheingoldRiver@BotPasswordName', 'smldrgsrthmldyhj')
 
 limit = -1
 
