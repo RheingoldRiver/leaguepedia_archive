@@ -12,40 +12,42 @@ response = site.cargo_client.query(
     where = "MSG.MatchHistory IS NULL AND SG.MatchHistory IS NOT NULL AND SG._pageName IS NOT NULL AND MSG._pageName IS NOT NULL AND SG.MatchHistory LIKE '%matchhistory%'",
     order_by = "DataPage"
 )
-    
-x = 0
-length = len(response)
+
+datapages = []
 
 for item in response:
-    x += 1
-    match_in_tab = int(item["N MatchInTab"])
-    tab_in_page = int(item["N TabInPage"])
-    game_in_match = item["N GameInMatch"]
-    match_history = item["MatchHistory"].strip()
-    data_page_title = item["DataPage"]
-    data_page = site.client.pages[item["DataPage"]]
+    if item["DataPage"] not in datapages:
+        datapages.append(item["DataPage"])
+
+for datapage in datapages:
+    items = {}
+    data_page = site.client.pages[datapage]
     data_text = data_page.text()
     data_wikitext = mwparserfromhell.parse(data_text)
-    tab_counters = 0
-    match_counters = 0
-    print(f"\nProcessing {str(data_page_title)}, Tab {str(tab_in_page)}, Match {str(match_in_tab)}, Game {str(game_in_match)}, MH {str(match_history)}, Item {str(x)} from {str(length)}")
+    for item in response:
+        if item["DataPage"] != datapage:
+            continue
+        match_in_tab = str(item["N MatchInTab"])
+        tab_in_page = str(item["N TabInPage"])
+        game_in_match = str(item["N GameInMatch"])
+        match_history = item["MatchHistory"].strip()
+        tab_counters = 0
+        match_counters = 0
+        game_counters = 0
+        items[f"{tab_in_page}_{match_in_tab}_{game_in_match}"] = str(match_history)
     for template in data_wikitext.filter_templates():
         if template.name.matches("MatchSchedule/Start"):
-            if tab_counters != tab_in_page:
-                tab_counters += 1
-            else:
-                print("Not Found!")
-                with open("errors.txt", "w+", "utf8") as f:
-                    f.write("Error with " + str(item["GameId"] + " in " + item["DataPage"] + "\n"))
+            tab_counters += 1
+            match_counters = 0
         elif template.name.matches("MatchSchedule"):
-            if tab_counters != tab_in_page:
-                continue
-            else:
-                match_counters += 1
-                if match_counters == match_in_tab and tab_counters == tab_in_page:
-                    gametemplate = template.get("game{}".format(str(game_in_match))).value
-                    gametemplate = gametemplate.filter_templates()[0]
-                    gametemplate.add("mh", match_history)
-                    data_page.edit(str(data_wikitext), summary = "Automatically adding MH from Scoreboards")
-                    print("Success with {0}".format(item["GameId"]))
-                    break
+            match_counters += 1
+            game_counters = 0
+        elif template.name.matches("MatchSchedule/Game"):
+            game_counters += 1
+            if f"{tab_counters}_{match_counters}_{game_counters}" in items:
+                match_history_to_add = items.get(f"{tab_counters}_{match_counters}_{game_counters}")
+                template.add("mh", match_history_to_add)
+        else:
+            continue
+    data_page.edit(str(data_wikitext), summary = "Automatically adding MH from Scoreboards")
+    print(f"Success with {datapage}")
