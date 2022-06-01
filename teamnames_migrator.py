@@ -8,6 +8,7 @@ import re
 class TeamnamesMigrator(object):
     DATA_PAGE = "{{{{Teamnames/Start}}}}\n{}{{{{Teamnames/End}}}}"
     TEAM_TEMPLATE = "{{{{Teamnames{}}}}}\n"
+    do_only = ["Data:Teamnames/0-9"]
 
     def __init__(self, site):
         self.site = site
@@ -44,14 +45,17 @@ class TeamnamesMigrator(object):
                     continue
                 if value["link"].split(" ", 1)[0].lower() != "team":
                     first_letter = value["link"][0].upper()
+                    title = first_letter
+                    if not re.search("[A-Z0-9]", first_letter):
+                        title = "Other"
+                    if re.search("[0-9]", first_letter):
+                        title = "0-9"
                 else:
                     first_letter = value["link"].split(" ", 1)[1][0].upper()
-                    first_letter = f"Team {first_letter}"
-                if not re.search("[A-Z0-9]", first_letter):
-                    first_letter = "Other"
-                if first_letter not in self.processed_teamnames.keys():
-                    self.processed_teamnames[first_letter] = {}
-                self.processed_teamnames[first_letter][key] = {
+                    title = f"Team {first_letter}"
+                if title not in self.processed_teamnames.keys():
+                    self.processed_teamnames[title] = {}
+                self.processed_teamnames[title][key] = {
                     "inputs": [key],
                     "link": value["link"],
                     "long": value["long"],
@@ -60,7 +64,7 @@ class TeamnamesMigrator(object):
                     "black": "true" if value.get("class") == "black" else "false",
                     "dark": "true" if value.get("class") == "dark" else "false"
                 }
-                self.team_indexes[key] = first_letter
+                self.team_indexes[key] = title
 
     def populate_inputs(self):
         for key, value in self.teamnames.items():
@@ -99,11 +103,12 @@ class TeamnamesMigrator(object):
             for team in teams.values():
                 page_teams_output += self.TEAM_TEMPLATE.format(self.concat_args(team))
             page_output = self.DATA_PAGE.format(page_teams_output)
-            try:
-                site.save_title(title=page, text=str(page_output), summary="Migrating Teamnames to Data")
-            except RetriedLoginAndStillFailed:
-                pass
-            print(f"Saved {page}")
+            if page in self.do_only:
+                try:
+                    site.save_title(title=page, text=str(page_output), summary="Migrating Teamnames to Data")
+                except RetriedLoginAndStillFailed:
+                    pass
+                print(f"Saved {page}")
 
 
 if __name__ == "__main__":
